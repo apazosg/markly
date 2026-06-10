@@ -158,8 +158,7 @@ void WasapiRecorder::MicLoop(std::wstring path) {
                           reinterpret_cast<void**>(&capture));
   if (FAILED(hr)) goto cleanup;
 
-  file = _wfopen(path.c_str(), L"wb");
-  if (!file) goto cleanup;
+  if (_wfopen_s(&file, path.c_str(), L"wb") != 0 || !file) goto cleanup;
   WriteWavHeaderPlaceholder(file);
 
   hr = client->Start();
