@@ -7,18 +7,24 @@ import 'models/note_entry.dart';
 import '../../shared/csv_service.dart';
 import '../../shared/file_service.dart';
 import '../../shared/foreground_service.dart';
+import '../../shared/wasapi_service.dart';
 
 enum RecordingState { idle, recording, paused }
 
 class RecordingController extends ChangeNotifier {
+  // En Windows la captura va por el runner nativo (WasapiService); en el resto
+  // de plataformas por el paquete `record`.
   final _recorder = AudioRecorder();
 
   RecordingState _state = RecordingState.idle;
   Duration _elapsed = Duration.zero;
   List<NoteEntry> _notes = [];
-  List<InputDevice> _inputDevices = [];
-  InputDevice? _selectedDevice;
-  double _amplitude = -60.0;
+  // Audio del sistema (la reunión) capturado vía WASAPI loopback nativo y
+  // mezclado con el micro en la misma pista. Por defecto activado. Solo Windows.
+  bool _captureSystemAudio = true;
+  bool _wasapiActive = false;
+  double _amplitude = -60.0; // dBFS, plataformas no-Windows
+  double _winLevel = 0.0; // 0–1, Windows (nativo)
   int? _pendingTimestampMs;
   String? _audioPath;
   String? _notesPath;
@@ -28,27 +34,22 @@ class RecordingController extends ChangeNotifier {
   RecordingState get state => _state;
   Duration get elapsed => _elapsed;
   List<NoteEntry> get notes => List.unmodifiable(_notes);
-  List<InputDevice> get inputDevices => List.unmodifiable(_inputDevices);
-  InputDevice? get selectedDevice => _selectedDevice;
+  bool get captureSystemAudio => _captureSystemAudio;
+  bool get systemAudioSupported => WasapiService.isSupported;
   bool get canAddNote => _state != RecordingState.idle;
   bool get hasPendingTimestamp => _pendingTimestampMs != null;
   int? get pendingTimestampMs => _pendingTimestampMs;
 
-  // Normalized 0–1 amplitude for UI. Silence is around -60 dBFS.
-  double get amplitudeLevel =>
-      _state == RecordingState.recording ? ((_amplitude + 60) / 60).clamp(0.0, 1.0) : 0.0;
-
-  Future<void> loadDevices() async {
-    if (!Platform.isWindows) return;
-    try {
-      _inputDevices = await _recorder.listInputDevices();
-      if (_inputDevices.isNotEmpty) _selectedDevice ??= _inputDevices.first;
-      notifyListeners();
-    } catch (_) {}
+  // Nivel 0–1 para el medidor. En Windows lo da el nativo; en el resto se deriva
+  // del dBFS (silencio ≈ -60 dBFS).
+  double get amplitudeLevel {
+    if (_state != RecordingState.recording) return 0.0;
+    if (Platform.isWindows) return _winLevel.clamp(0.0, 1.0);
+    return ((_amplitude + 60) / 60).clamp(0.0, 1.0);
   }
 
-  void selectDevice(InputDevice device) {
-    _selectedDevice = device;
+  void setCaptureSystemAudio(bool value) {
+    _captureSystemAudio = value;
     notifyListeners();
   }
 
@@ -67,30 +68,25 @@ class RecordingController extends ChangeNotifier {
     _notes = [];
     _elapsed = Duration.zero;
     _amplitude = -60.0;
-
-    // WAV en Windows: AAC 16kHz mono no es compatible con Media Foundation
-    final config = (!kIsWeb && Platform.isWindows)
-        ? const RecordConfig(
-            encoder: AudioEncoder.wav,
-            sampleRate: 44100,
-            numChannels: 1,
-          )
-        : RecordConfig(
-            encoder: AudioEncoder.aacLc,
-            sampleRate: 16000,
-            numChannels: 1,
-            device: _selectedDevice,
-          );
+    _winLevel = 0.0;
 
     try {
-      await _recorder.start(config, path: _audioPath!);
+      if (Platform.isWindows) {
+        final ok = await WasapiService.start(_audioPath!, captureSystem: _captureSystemAudio);
+        if (!ok) return 'No se pudo iniciar la captura de audio';
+        _wasapiActive = true;
+      } else {
+        await _recorder.start(
+          const RecordConfig(encoder: AudioEncoder.aacLc, sampleRate: 16000, numChannels: 1),
+          path: _audioPath!,
+        );
+        _ampSub = _recorder.onAmplitudeChanged(const Duration(milliseconds: 100)).listen((amp) {
+          _amplitude = amp.current;
+        });
+      }
     } catch (e) {
       return 'Error al iniciar grabación: $e';
     }
-
-    _ampSub = _recorder.onAmplitudeChanged(const Duration(milliseconds: 100)).listen((amp) {
-      _amplitude = amp.current;
-    });
 
     await WakelockPlus.enable();
     await ForegroundService.start('Grabando…');
@@ -103,7 +99,11 @@ class RecordingController extends ChangeNotifier {
 
   Future<void> pauseRecording() async {
     if (_state != RecordingState.recording) return;
-    await _recorder.pause();
+    if (Platform.isWindows) {
+      await WasapiService.pause();
+    } else {
+      await _recorder.pause();
+    }
     _timer?.cancel();
     _state = RecordingState.paused;
     await ForegroundService.update('En pausa · ${_formatElapsed(_elapsed)}');
@@ -112,7 +112,11 @@ class RecordingController extends ChangeNotifier {
 
   Future<void> resumeRecording() async {
     if (_state != RecordingState.paused) return;
-    await _recorder.resume();
+    if (Platform.isWindows) {
+      await WasapiService.resume();
+    } else {
+      await _recorder.resume();
+    }
     _startTimer();
     _state = RecordingState.recording;
     notifyListeners();
@@ -122,7 +126,14 @@ class RecordingController extends ChangeNotifier {
     if (_state == RecordingState.idle) return null;
     _timer?.cancel();
     await _ampSub?.cancel();
-    await _recorder.stop();
+    if (Platform.isWindows) {
+      if (_wasapiActive) {
+        await WasapiService.stop();
+        _wasapiActive = false;
+      }
+    } else {
+      await _recorder.stop();
+    }
     await WakelockPlus.disable();
     await ForegroundService.stop();
 
@@ -134,6 +145,7 @@ class RecordingController extends ChangeNotifier {
     _elapsed = Duration.zero;
     _notes = [];
     _amplitude = -60.0;
+    _winLevel = 0.0;
     _pendingTimestampMs = null;
     notifyListeners();
 
@@ -184,6 +196,11 @@ class RecordingController extends ChangeNotifier {
   void _startTimer() {
     _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
       _elapsed += const Duration(milliseconds: 100);
+      if (Platform.isWindows && _state == RecordingState.recording) {
+        WasapiService.amplitude().then((v) {
+          _winLevel = v;
+        }).catchError((_) {});
+      }
       // Update notification once per second
       if (_elapsed.inMilliseconds % 1000 < 100) {
         ForegroundService.update(_formatElapsed(_elapsed));

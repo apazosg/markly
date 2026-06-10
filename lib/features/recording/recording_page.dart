@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
-import 'package:record/record.dart';
 import 'recording_controller.dart';
 import 'models/note_entry.dart';
 import '../auth/auth_service.dart';
@@ -24,7 +23,6 @@ class _RecordingPageState extends State<RecordingPage> {
   void initState() {
     super.initState();
     _controller.addListener(_onUpdate);
-    _controller.loadDevices();
   }
 
   void _onUpdate() {
@@ -131,7 +129,7 @@ class _RecordingPageState extends State<RecordingPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Markly'),
+        title: const Text('Home'),
         actions: [
           if (isActive)
             IconButton(
@@ -151,8 +149,8 @@ class _RecordingPageState extends State<RecordingPage> {
           _TimerDisplay(controller: _controller),
           if (state == RecordingState.recording)
             _AmplitudeBar(level: _controller.amplitudeLevel),
-          if (!isActive && Platform.isWindows && _controller.inputDevices.isNotEmpty)
-            _DeviceSelector(controller: _controller),
+          if (!isActive && _controller.systemAudioSupported)
+            _SystemAudioToggle(controller: _controller),
           Expanded(
             child: _NotesList(
               notes: _controller.notes,
@@ -212,7 +210,7 @@ class _TimerDisplay extends StatelessWidget {
     final theme = Theme.of(context);
     final state = controller.state;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 28),
+      padding: EdgeInsets.symmetric(vertical: Platform.isWindows ? 14 : 28),
       child: Column(
         children: [
           Text(_format(controller.elapsed), style: theme.textTheme.displayLarge?.copyWith(letterSpacing: 4)),
@@ -269,36 +267,34 @@ class _AmplitudeBar extends StatelessWidget {
   }
 }
 
-// ── Device selector (Windows only) ─────────────────────────────────────────
+// ── System audio toggle (Windows only) ─────────────────────────────────────
 
-class _DeviceSelector extends StatelessWidget {
+class _SystemAudioToggle extends StatelessWidget {
   final RecordingController controller;
-  const _DeviceSelector({required this.controller});
+  const _SystemAudioToggle({required this.controller});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
+      padding: const EdgeInsets.fromLTRB(16, 0, 12, 4),
       child: Row(
         children: [
-          const Icon(Icons.settings_input_component, size: 18),
+          Icon(Icons.computer, size: 16, color: theme.colorScheme.outline),
           const SizedBox(width: 8),
           Expanded(
-            child: DropdownButton<InputDevice>(
-              isExpanded: true,
-              value: controller.selectedDevice,
-              items: controller.inputDevices
-                  .map((d) => DropdownMenuItem(value: d, child: Text(d.label, overflow: TextOverflow.ellipsis)))
-                  .toList(),
-              onChanged: (d) { if (d != null) controller.selectDevice(d); },
-            ),
-          ),
-          Tooltip(
-            message: 'Para audio del sistema (Teams, Zoom…)\nactiva "Stereo Mix" en Sonido → Grabar\no instala VB-Audio Cable (gratuito).',
-            preferBelow: false,
-            child: Icon(Icons.help_outline, size: 18, color: Theme.of(context).colorScheme.outline),
+            child: Text('Incluir audio del sistema', style: theme.textTheme.bodySmall, overflow: TextOverflow.ellipsis),
           ),
           const SizedBox(width: 8),
+          Tooltip(
+            message: 'Graba también el audio que suena en tu PC\n(la otra persona de la reunión), además del micro,\nmezclado en la misma pista.\nNo requiere Stereo Mix ni cables virtuales.',
+            preferBelow: false,
+            child: Icon(Icons.help_outline, size: 16, color: theme.colorScheme.outline),
+          ),
+          Switch(
+            value: controller.captureSystemAudio,
+            onChanged: controller.setCaptureSystemAudio,
+          ),
         ],
       ),
     );
@@ -545,13 +541,22 @@ class _ControlBar extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
       child: switch (state) {
-        RecordingState.idle => SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              icon: const Icon(Icons.mic),
-              label: const Text('Iniciar grabación'),
-              style: FilledButton.styleFrom(backgroundColor: errorColor, padding: const EdgeInsets.symmetric(vertical: 16)),
-              onPressed: onStart,
+        RecordingState.idle => Center(
+            child: Tooltip(
+              message: 'Iniciar grabación',
+              child: SizedBox(
+                width: 76,
+                height: 76,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: errorColor,
+                    shape: const CircleBorder(),
+                    padding: EdgeInsets.zero,
+                  ),
+                  onPressed: onStart,
+                  child: const Icon(Icons.mic, size: 32),
+                ),
+              ),
             ),
           ),
         RecordingState.recording => Row(
