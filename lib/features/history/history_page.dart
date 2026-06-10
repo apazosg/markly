@@ -654,7 +654,9 @@ class _SessionCard extends StatelessWidget {
   Future<void> _share() async {
     final files = [XFile(session.audioPath!)];
     if (await File(session.notesPath!).exists()) files.add(XFile(session.notesPath!));
-    await Share.shareXFiles(files, subject: 'Markly · ${session.displayTitle}');
+    await SharePlus.instance.share(
+      ShareParams(files: files, subject: 'Markly · ${session.displayTitle}'),
+    );
   }
 
   void _openFolder() {

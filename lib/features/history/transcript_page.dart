@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import '../../shared/api_service.dart';
 import '../../shared/csv_service.dart';
 import '../../shared/metadata_service.dart';
