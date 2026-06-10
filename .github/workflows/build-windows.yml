@@ -39,11 +39,9 @@ jobs:
       - name: Package MSIX
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
-          $ver = if ($tag -match '^v(\d+\.\d+\.\d+)$') { "$($Matches[1]).0" } else { "0.1.0.0" }
-          dart run msix:create --version $ver
+          dart run msix:create
           $msix = Get-ChildItem -Recurse -Filter "*.msix" | Select-Object -First 1
-          Copy-Item $msix.FullName "markly-windows-$tag.msix"
+          Copy-Item $msix.FullName "markly-windows-${{ github.ref_name }}.msix"
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4

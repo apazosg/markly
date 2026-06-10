@@ -54,7 +54,7 @@ msix_config:
   capabilities: microphone, internetClient
   languages: es-es, en-us
   store: false
-  sign_msix: true
+  sign_msix: false
 
 flutter:
   uses-material-design: true
