@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Background -->
+  <rect width="1024" height="1024" fill="#0D0E1F"/>
+
+  <!-- Microphone capsule (rounded rect) -->
+  <rect x="392" y="180" width="240" height="360" rx="120" fill="white"/>
+
+  <!-- Microphone stand arc -->
+  <path d="M 272 540 Q 272 720 512 720 Q 752 720 752 540"
+        fill="none" stroke="white" stroke-width="52" stroke-linecap="round"/>
+
+  <!-- Stem -->
+  <line x1="512" y1="720" x2="512" y2="830"
+        stroke="white" stroke-width="52" stroke-linecap="round"/>
+
+  <!-- Base foot -->
+  <line x1="342" y1="830" x2="682" y2="830"
+        stroke="white" stroke-width="52" stroke-linecap="round"/>
+
+  <!-- Red recording dot — top-right, classic REC indicator -->
+  <circle cx="726" cy="226" r="90" fill="#E53935"/>
+</svg>

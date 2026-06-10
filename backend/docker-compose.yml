@@ -1,0 +1,68 @@
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://markly:${DB_PASSWORD}@db:5432/markly
+      FIREBASE_SA_JSON: ${FIREBASE_SA_JSON}
+      DEEPGRAM_API_KEY: ${DEEPGRAM_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      UPLOAD_DIR: /app/data
+      UNLIMITED_EMAILS: adrianpazosg@gmail.com
+    volumes:
+      - ./marklydata/uploads:/app/data
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: markly
+      POSTGRES_USER: markly
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./marklydata/postgres:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U markly"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    # En Cloudflare Zero Trust → Tunnels → Public Hostname:
+    #   markly.adriangp.com → http://api:8000
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - internal
+    depends_on:
+      api:
+        condition: service_healthy
+
+networks:
+  internal:
+    driver: bridge
+

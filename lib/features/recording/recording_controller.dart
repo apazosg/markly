@@ -1,0 +1,209 @@
+import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:record/record.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'models/note_entry.dart';
+import '../../shared/csv_service.dart';
+import '../../shared/file_service.dart';
+import '../../shared/foreground_service.dart';
+
+enum RecordingState { idle, recording, paused }
+
+class RecordingController extends ChangeNotifier {
+  final _recorder = AudioRecorder();
+
+  RecordingState _state = RecordingState.idle;
+  Duration _elapsed = Duration.zero;
+  List<NoteEntry> _notes = [];
+  List<InputDevice> _inputDevices = [];
+  InputDevice? _selectedDevice;
+  double _amplitude = -60.0;
+  int? _pendingTimestampMs;
+  String? _audioPath;
+  String? _notesPath;
+  Timer? _timer;
+  StreamSubscription<Amplitude>? _ampSub;
+
+  RecordingState get state => _state;
+  Duration get elapsed => _elapsed;
+  List<NoteEntry> get notes => List.unmodifiable(_notes);
+  List<InputDevice> get inputDevices => List.unmodifiable(_inputDevices);
+  InputDevice? get selectedDevice => _selectedDevice;
+  bool get canAddNote => _state != RecordingState.idle;
+  bool get hasPendingTimestamp => _pendingTimestampMs != null;
+  int? get pendingTimestampMs => _pendingTimestampMs;
+
+  // Normalized 0–1 amplitude for UI. Silence is around -60 dBFS.
+  double get amplitudeLevel =>
+      _state == RecordingState.recording ? ((_amplitude + 60) / 60).clamp(0.0, 1.0) : 0.0;
+
+  Future<void> loadDevices() async {
+    if (!Platform.isWindows) return;
+    try {
+      _inputDevices = await _recorder.listInputDevices();
+      if (_inputDevices.isNotEmpty) _selectedDevice ??= _inputDevices.first;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  void selectDevice(InputDevice device) {
+    _selectedDevice = device;
+    notifyListeners();
+  }
+
+  // null = éxito, String = mensaje de error para mostrar al usuario
+  Future<String?> startRecording() async {
+    if (_state != RecordingState.idle) return null;
+
+    // En Windows el modelo de permisos no usa hasPermission(). En Android sí.
+    if (!Platform.isWindows && !await _recorder.hasPermission()) {
+      return 'Permiso de micrófono denegado';
+    }
+
+    final paths = await FileService.createSessionPaths();
+    _audioPath = paths.audioPath;
+    _notesPath = paths.notesPath;
+    _notes = [];
+    _elapsed = Duration.zero;
+    _amplitude = -60.0;
+
+    // WAV en Windows: AAC 16kHz mono no es compatible con Media Foundation
+    final config = (!kIsWeb && Platform.isWindows)
+        ? const RecordConfig(
+            encoder: AudioEncoder.wav,
+            sampleRate: 44100,
+            numChannels: 1,
+          )
+        : RecordConfig(
+            encoder: AudioEncoder.aacLc,
+            sampleRate: 16000,
+            numChannels: 1,
+            device: _selectedDevice,
+          );
+
+    try {
+      await _recorder.start(config, path: _audioPath!);
+    } catch (e) {
+      return 'Error al iniciar grabación: $e';
+    }
+
+    _ampSub = _recorder.onAmplitudeChanged(const Duration(milliseconds: 100)).listen((amp) {
+      _amplitude = amp.current;
+    });
+
+    await WakelockPlus.enable();
+    await ForegroundService.start('Grabando…');
+
+    _state = RecordingState.recording;
+    _startTimer();
+    notifyListeners();
+    return null;
+  }
+
+  Future<void> pauseRecording() async {
+    if (_state != RecordingState.recording) return;
+    await _recorder.pause();
+    _timer?.cancel();
+    _state = RecordingState.paused;
+    await ForegroundService.update('En pausa · ${_formatElapsed(_elapsed)}');
+    notifyListeners();
+  }
+
+  Future<void> resumeRecording() async {
+    if (_state != RecordingState.paused) return;
+    await _recorder.resume();
+    _startTimer();
+    _state = RecordingState.recording;
+    notifyListeners();
+  }
+
+  Future<({String audioPath, String notesPath, int durationMs})?> stopRecording() async {
+    if (_state == RecordingState.idle) return null;
+    _timer?.cancel();
+    await _ampSub?.cancel();
+    await _recorder.stop();
+    await WakelockPlus.disable();
+    await ForegroundService.stop();
+
+    if (_notesPath != null) await CsvService.write(_notesPath!, _notes);
+
+    final result = (audioPath: _audioPath!, notesPath: _notesPath!, durationMs: _elapsed.inMilliseconds);
+
+    _state = RecordingState.idle;
+    _elapsed = Duration.zero;
+    _notes = [];
+    _amplitude = -60.0;
+    _pendingTimestampMs = null;
+    notifyListeners();
+
+    return result;
+  }
+
+  // Pins the current timestamp. Call this when the user taps "Añadir nota".
+  void pinTimestamp() {
+    if (!canAddNote) return;
+    _pendingTimestampMs = _elapsed.inMilliseconds;
+    notifyListeners();
+  }
+
+  void cancelPin() {
+    _pendingTimestampMs = null;
+    notifyListeners();
+  }
+
+  // Commits the note using the previously pinned timestamp.
+  void addNote(String text) {
+    if (text.trim().isEmpty) return;
+    _notes = [..._notes, NoteEntry(
+      timestampMs: _pendingTimestampMs ?? _elapsed.inMilliseconds,
+      text: text.trim(),
+    )];
+    _pendingTimestampMs = null;
+    notifyListeners();
+  }
+
+  void updateNoteTitle(int index, String title) {
+    if (index < 0 || index >= _notes.length) return;
+    final note = _notes[index];
+    final updated = NoteEntry(
+      timestampMs: note.timestampMs,
+      text: note.text,
+      title: title.trim().isEmpty ? null : title.trim(),
+    );
+    _notes = List.from(_notes)..[index] = updated;
+    notifyListeners();
+  }
+
+  void removeNote(int index) {
+    if (index < 0 || index >= _notes.length) return;
+    _notes = List.from(_notes)..removeAt(index);
+    notifyListeners();
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      _elapsed += const Duration(milliseconds: 100);
+      // Update notification once per second
+      if (_elapsed.inMilliseconds % 1000 < 100) {
+        ForegroundService.update(_formatElapsed(_elapsed));
+      }
+      notifyListeners();
+    });
+  }
+
+  static String _formatElapsed(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return h > 0 ? 'Grabando · $h:$m:$s' : 'Grabando · $m:$s';
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _ampSub?.cancel();
+    _recorder.dispose();
+    super.dispose();
+  }
+}
