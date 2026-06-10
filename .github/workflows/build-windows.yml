@@ -36,18 +36,18 @@ jobs:
           --dart-define=API_BASE_URL=${{ inputs.api_base_url || 'https://markly.adriangp.com' }}
           --dart-define=GOOGLE_DESKTOP_CLIENT_SECRET=${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
 
-      - name: Package MSIX
+      - name: Package portable ZIP
         shell: pwsh
-        run: |
-          dart run msix:create
-          $msix = Get-ChildItem -Recurse -Filter "*.msix" | Select-Object -First 1
-          Copy-Item $msix.FullName "markly-windows-${{ github.ref_name }}.msix"
+        run: >
+          Compress-Archive
+          -Path build/windows/x64/runner/Release/*
+          -DestinationPath markly-windows-${{ github.ref_name }}.zip
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v7
         with:
-          name: windows-msix
-          path: markly-windows-${{ github.ref_name }}.msix
+          name: windows-portable
+          path: markly-windows-${{ github.ref_name }}.zip
           retention-days: 7
 
   build-android:
@@ -93,10 +93,10 @@ jobs:
       contents: write
 
     steps:
-      - name: Download Windows MSIX
+      - name: Download Windows portable
         uses: actions/download-artifact@v8
         with:
-          name: windows-msix
+          name: windows-portable
           path: dist
 
       - name: Download Android APK
@@ -109,7 +109,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            dist/markly-windows-${{ github.ref_name }}.msix
+            dist/markly-windows-${{ github.ref_name }}.zip
             dist/markly-android-${{ github.ref_name }}.apk
           fail_on_unmatched_files: true
           generate_release_notes: true
