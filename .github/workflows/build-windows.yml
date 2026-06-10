@@ -89,6 +89,8 @@ jobs:
     needs: [build-windows, build-android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
 
     steps:
       - name: Download Windows MSIX
@@ -105,7 +107,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            markly-windows-${{ github.ref_name }}.msix
-            markly-android-${{ github.ref_name }}.apk
+            windows-msix/markly-windows-${{ github.ref_name }}.msix
+            android-apk/markly-android-${{ github.ref_name }}.apk
           generate_release_notes: true
           name: Markly ${{ github.ref_name }}
