@@ -2,8 +2,14 @@ name: Build & Release
 
 on:
   push:
+    branches:
+      - main
+      - 'feat/**'
     tags:
       - 'v*'
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       api_base_url:
@@ -37,6 +43,7 @@ jobs:
           --dart-define=GOOGLE_DESKTOP_CLIENT_SECRET=${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
 
       - name: Package portable ZIP
+        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         run: >
           Compress-Archive
@@ -44,6 +51,7 @@ jobs:
           -DestinationPath markly-windows-${{ github.ref_name }}.zip
 
       - name: Upload Windows artifact
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v7
         with:
           name: windows-portable
@@ -76,9 +84,11 @@ jobs:
           --dart-define=API_BASE_URL=${{ inputs.api_base_url || 'https://markly.adriangp.com' }}
 
       - name: Rename APK
+        if: startsWith(github.ref, 'refs/tags/')
         run: cp build/app/outputs/flutter-apk/app-release.apk markly-android-${{ github.ref_name }}.apk
 
       - name: Upload Android artifact
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v7
         with:
           name: android-apk

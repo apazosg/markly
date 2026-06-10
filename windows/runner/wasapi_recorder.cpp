@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <audioclient.h>
 #include <mmdeviceapi.h>
+#include <mmreg.h>
 
 #include <cstdio>
 #include <vector>
