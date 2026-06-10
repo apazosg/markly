@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'features/recording/recording_page.dart';
 import 'features/history/history_page.dart';
+import 'features/chat/chat_page.dart';
+import 'features/tasks/tasks_page.dart';
 import 'features/account/account_page.dart';
 import 'features/auth/login_page.dart';
 import 'shared/theme.dart';
@@ -92,7 +94,7 @@ class _MainShellState extends State<_MainShell> {
   int _selectedIndex = 0;
   UpdateInfo? _pendingUpdate;
 
-  static const _pages = [RecordingPage(), HistoryPage(), AccountPage()];
+  static const _pages = [RecordingPage(), HistoryPage(), ChatPage(), TasksPage(), AccountPage()];
 
   @override
   void initState() {
@@ -124,6 +126,8 @@ class _MainShellState extends State<_MainShell> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.history), label: 'Historial'),
+          NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), selectedIcon: Icon(Icons.auto_awesome), label: 'Asistente'),
+          NavigationDestination(icon: Icon(Icons.checklist_outlined), selectedIcon: Icon(Icons.checklist), label: 'Tareas'),
           NavigationDestination(icon: Icon(Icons.person_outline), label: 'Cuenta'),
         ],
       ),

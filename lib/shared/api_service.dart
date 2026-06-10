@@ -92,6 +92,71 @@ class ApiService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> chatText(List<Map<String, String>> messages) async {
+    final token = await _token();
+    final response = await http.post(
+      Uri.parse('$_baseUrl/chat'),
+      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      body: jsonEncode({'messages': messages}),
+    );
+    if (response.statusCode != 200) {
+      throw HttpException('Error ${response.statusCode}: ${response.body}');
+    }
+    return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> chatAudio(String audioPath, List<Map<String, String>> history) async {
+    final token = await _token();
+    final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/chat/audio'))
+      ..headers['Authorization'] = 'Bearer $token'
+      ..fields['history'] = jsonEncode(history)
+      ..files.add(await http.MultipartFile.fromPath('audio', audioPath));
+    final streamed = await request.send();
+    final body = await streamed.stream.bytesToString();
+    if (streamed.statusCode != 200) throw HttpException('Error ${streamed.statusCode}: $body');
+    return jsonDecode(body) as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> listTasks({String? status}) async {
+    final token = await _token();
+    final uri = Uri.parse('$_baseUrl/tasks')
+        .replace(queryParameters: status != null ? {'status': status} : null);
+    final response = await http.get(uri, headers: {'Authorization': 'Bearer $token'});
+    if (response.statusCode != 200) throw HttpException('Error ${response.statusCode}');
+    return (jsonDecode(utf8.decode(response.bodyBytes)) as List).cast<Map<String, dynamic>>();
+  }
+
+  Future<Map<String, dynamic>> createTask(Map<String, dynamic> task) async {
+    final token = await _token();
+    final response = await http.post(
+      Uri.parse('$_baseUrl/tasks'),
+      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      body: jsonEncode(task),
+    );
+    if (response.statusCode != 201) throw HttpException('Error ${response.statusCode}: ${response.body}');
+    return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateTask(String taskId, Map<String, dynamic> patch) async {
+    final token = await _token();
+    final response = await http.patch(
+      Uri.parse('$_baseUrl/tasks/$taskId'),
+      headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json'},
+      body: jsonEncode(patch),
+    );
+    if (response.statusCode != 200) throw HttpException('Error ${response.statusCode}');
+    return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+  }
+
+  Future<void> deleteTask(String taskId) async {
+    final token = await _token();
+    final response = await http.delete(
+      Uri.parse('$_baseUrl/tasks/$taskId'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode != 204) throw HttpException('Error ${response.statusCode}');
+  }
+
   Future<void> updateMetadata(String serverId, Map<String, dynamic> patch) async {
     final token = await _token();
     final response = await http.patch(
