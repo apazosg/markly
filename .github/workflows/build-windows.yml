@@ -94,6 +94,27 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      # Firma estable de release desde secrets. Sin secrets (forks/PRs) cae a
+      # debug y el APK no es publicable, pero el build no rompe.
+      - name: Configure Android signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "Sin keystore: se firmará con debug."
+            exit 0
+          fi
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/markly-release.jks
+          cat > android/key.properties <<EOF
+          storeFile=markly-release.jks
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          EOF
+
       - name: Resolve version flag
         id: ver
         run: |
