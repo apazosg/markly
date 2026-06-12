@@ -9,12 +9,14 @@ const _repo = 'markly';
 
 class UpdateInfo {
   final String version;
-  final String msixUrl;
+  // Página de la release (Windows: descarga manual del ZIP portable).
+  final String releaseUrl;
+  // APK directo (Android: el navegador lo descarga y el SO lo instala).
   final String apkUrl;
 
   const UpdateInfo({
     required this.version,
-    required this.msixUrl,
+    required this.releaseUrl,
     required this.apkUrl,
   });
 }
@@ -41,25 +43,24 @@ class UpdateService {
       if (!_isNewer(tag, current)) return null;
 
       final fullTag = 'v$tag';
-      final base =
-          'https://github.com/$_owner/$_repo/releases/download/$fullTag';
+      final releaseUrl = (data['html_url'] as String?) ??
+          'https://github.com/$_owner/$_repo/releases/tag/$fullTag';
 
       return UpdateInfo(
         version: tag,
-        msixUrl: '$base/markly-windows-$fullTag.msix',
-        apkUrl: '$base/markly-android-$fullTag.apk',
+        releaseUrl: releaseUrl,
+        apkUrl:
+            'https://github.com/$_owner/$_repo/releases/download/$fullTag/markly-android-$fullTag.apk',
       );
     } catch (_) {
       return null;
     }
   }
 
-  // Returns the appropriate install URL for the current platform.
-  // Windows uses ms-appinstaller:// so App Installer handles the MSIX directly.
+  // URL a abrir según plataforma. Windows: página de la release (descarga
+  // manual del ZIP portable). Android: APK directo.
   static String installUrl(UpdateInfo info) {
-    if (Platform.isWindows) {
-      return 'ms-appinstaller://?source=${Uri.encodeComponent(info.msixUrl)}';
-    }
+    if (Platform.isWindows) return info.releaseUrl;
     return info.apkUrl;
   }
 

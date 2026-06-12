@@ -36,13 +36,25 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      # En builds de tag, la versión embebida en el binario debe coincidir con el
+      # tag (no con el pubspec) para que el aviso de actualización sea fiable.
+      - name: Resolve version flag
+        id: ver
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "flag=--build-name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build Windows release
         # firebase_cpp_sdk trae un cmake_minimum_required < 3.5; CMake 4.x (runner)
         # eliminó esa compatibilidad. Forzamos la política mínima a 3.5.
         env:
           CMAKE_POLICY_VERSION_MINIMUM: '3.5'
         run: >
-          flutter build windows --release
+          flutter build windows --release ${{ steps.ver.outputs.flag }}
           --dart-define=API_BASE_URL=${{ inputs.api_base_url || 'https://markly.adriangp.com' }}
           --dart-define=GOOGLE_DESKTOP_CLIENT_SECRET=${{ secrets.GOOGLE_DESKTOP_CLIENT_SECRET }}
 
@@ -82,9 +94,18 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Resolve version flag
+        id: ver
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "flag=--build-name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build Android APK
         run: >
-          flutter build apk --release
+          flutter build apk --release ${{ steps.ver.outputs.flag }}
           --dart-define=API_BASE_URL=${{ inputs.api_base_url || 'https://markly.adriangp.com' }}
 
       - name: Rename APK
