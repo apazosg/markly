@@ -40,12 +40,16 @@ class ApiService {
     return (jsonDecode(response.body) as List).cast<Map<String, dynamic>>();
   }
 
-  Future<String> uploadSession(String audioPath, String notesPath) async {
+  Future<String> uploadSession(String audioPath, String notesPath,
+      {List<String> labels = const []}) async {
     final token = await _token();
     final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/sessions'))
       ..headers['Authorization'] = 'Bearer $token'
       ..files.add(await http.MultipartFile.fromPath('audio', audioPath))
       ..files.add(await http.MultipartFile.fromPath('notes', notesPath));
+    // Las etiquetas viajan en el upload para que el backend elija el formato
+    // del resumen (p. ej. "one to one") ya en la primera pasada.
+    if (labels.isNotEmpty) request.fields['labels'] = jsonEncode(labels);
 
     final streamed = await request.send();
     final body = await streamed.stream.bytesToString();

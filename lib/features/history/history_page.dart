@@ -218,7 +218,9 @@ class _HistoryPageState extends State<HistoryPage> {
   Future<void> _uploadSession(_Session session) async {
     setState(() => session.uploading = true);
     try {
-      final serverId = await ApiService().uploadSession(session.audioPath!, session.notesPath!);
+      final serverId = await ApiService().uploadSession(
+          session.audioPath!, session.notesPath!,
+          labels: session.meta.labels);
       await File(p.join(session.sessionDir!, '.uploaded')).writeAsString(serverId);
       setState(() { session.serverId = serverId; session.uploading = false; });
       // Push metadata already stored locally

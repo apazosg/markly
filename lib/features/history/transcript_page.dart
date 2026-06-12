@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import '../../shared/api_service.dart';
 import '../../shared/csv_service.dart';
+import '../../shared/markdown.dart';
 import '../../shared/metadata_service.dart';
 import '../recording/models/note_entry.dart';
 
@@ -162,7 +163,11 @@ class _TranscriptPageState extends State<TranscriptPage>
     final items = <_TimelineItem>[];
     for (final u in utterances) {
       if (paragraphBreaks.any((ps) => (u.start - ps).abs() < 1.0)) {
-        items.add(_SectionBreak(u.start - 0.0001));
+        // El corte de párrafo solo aporta si cambia de hablante; dentro del
+        // mismo hablante es ruido.
+        final prev = items.isNotEmpty ? items.last : null;
+        final sameSpeaker = prev is _UtteranceItem && prev.utterance.speaker == u.speaker;
+        if (!sameSpeaker) items.add(_SectionBreak(u.start - 0.0001));
       }
       items.add(_UtteranceItem(u));
     }
@@ -605,11 +610,25 @@ class _TranscriptPageState extends State<TranscriptPage>
     );
   }
 
+  String _effectiveSpeaker(_Utterance u) =>
+      _meta.speakerOverrides[_editKey(u.start)] ?? u.speaker;
+
+  // Una intervención es "continuación" si el item anterior es del mismo
+  // hablante (una nota o corte de párrafo intermedios la rompen).
+  bool _continuesSpeaker(int idx) {
+    if (idx == 0) return false;
+    final prev = _timeline[idx - 1];
+    final cur = _timeline[idx];
+    if (prev is! _UtteranceItem || cur is! _UtteranceItem) return false;
+    return _effectiveSpeaker(prev.utterance) == _effectiveSpeaker(cur.utterance);
+  }
+
   Widget _buildItem(_TimelineItem item, int idx) {
     final isCurrentMatch = _matchIndices.isNotEmpty && _matchIndices[_currentMatchIdx] == idx;
     return switch (item) {
       _UtteranceItem u => _UtteranceTile(
           utterance: u.utterance,
+          continuation: _continuesSpeaker(idx),
           effectiveSpeaker: _meta.speakerOverrides[_editKey(u.utterance.start)],
           editedText: _meta.utteranceEdits[_editKey(u.utterance.start)],
           speakerName: _meta.speakerNames[_meta.speakerOverrides[_editKey(u.utterance.start)] ?? u.utterance.speaker],
@@ -680,7 +699,7 @@ class _SummaryTab extends StatelessWidget {
       children: [
         if (summary != null) ...[
           MarkdownBody(
-            data: summary!,
+            data: normalizeMarkdown(summary!),
             selectable: true,
             styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
               p: Theme.of(context).textTheme.bodyMedium,
@@ -892,6 +911,7 @@ class _SectionDivider extends StatelessWidget {
 
 class _UtteranceTile extends StatelessWidget {
   final _Utterance utterance;
+  final bool continuation;
   final String? effectiveSpeaker;
   final String? editedText;
   final String? speakerName;
@@ -906,6 +926,7 @@ class _UtteranceTile extends StatelessWidget {
     required this.onTapSpeaker,
     required this.onTapText,
     required this.onAddNote,
+    this.continuation = false,
     this.effectiveSpeaker,
     this.editedText,
     this.speakerName,
@@ -924,35 +945,43 @@ class _UtteranceTile extends StatelessWidget {
     final highlightColor = isCurrentMatch ? Colors.orange.shade300 : Colors.yellow.shade300;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.only(bottom: continuation ? 3 : 12),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Column(children: [
-          GestureDetector(
-            onTap: onTapSpeaker,
-            child: CircleAvatar(
-              radius: 16,
-              backgroundColor: color.withValues(alpha: 0.2),
-              child: Text(
-                speakerName?.substring(0, 1).toUpperCase() ?? resolvedSpeaker,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color),
-              ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(_formatTime(utterance.start),
-              style: TextStyle(fontFamily: 'monospace', fontSize: 9, color: Theme.of(context).colorScheme.outline)),
-        ]),
+        SizedBox(
+          width: 32,
+          child: continuation
+              ? Text(_formatTime(utterance.start), textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: 'monospace', fontSize: 9, color: Theme.of(context).colorScheme.outline))
+              : Column(children: [
+                  GestureDetector(
+                    onTap: onTapSpeaker,
+                    child: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: color.withValues(alpha: 0.2),
+                      child: Text(
+                        speakerName?.substring(0, 1).toUpperCase() ?? resolvedSpeaker,
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(_formatTime(utterance.start),
+                      style: TextStyle(fontFamily: 'monospace', fontSize: 9, color: Theme.of(context).colorScheme.outline)),
+                ]),
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
-              if (isEdited) ...[
-                const SizedBox(width: 4),
-                Icon(Icons.edit, size: 10, color: Theme.of(context).colorScheme.outline),
-              ],
-            ]),
-            const SizedBox(height: 2),
+            if (!continuation) ...[
+              Row(children: [
+                Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+                if (isEdited) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.edit, size: 10, color: Theme.of(context).colorScheme.outline),
+                ],
+              ]),
+              const SizedBox(height: 2),
+            ],
             GestureDetector(
               onTap: onTapText,
               child: Container(

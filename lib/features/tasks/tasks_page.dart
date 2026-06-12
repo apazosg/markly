@@ -50,6 +50,21 @@ class _TasksPageState extends State<TasksPage> {
     }
   }
 
+  Future<void> _editDate(_Task task) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: task.dueDate ?? now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 3),
+      helpText: 'Fecha límite',
+    );
+    if (picked == null) return;
+    await _patch(task, {
+      'due_date': DateTime(picked.year, picked.month, picked.day).toIso8601String(),
+    });
+  }
+
   Future<void> _delete(_Task task) async {
     setState(() => _tasks.removeWhere((t) => t.id == task.id));
     try {
@@ -101,7 +116,14 @@ class _TasksPageState extends State<TasksPage> {
   @override
   Widget build(BuildContext context) {
     final suggested = _byStatus('suggested');
-    final pending = _byStatus('pending');
+    final pending = _byStatus('pending')
+      ..sort((a, b) {
+        // Pendientes por fecha ascendente; las sin fecha, al final.
+        if (a.dueDate == null && b.dueDate == null) return 0;
+        if (a.dueDate == null) return 1;
+        if (b.dueDate == null) return -1;
+        return a.dueDate!.compareTo(b.dueDate!);
+      });
     final done = _byStatus('done');
 
     return Scaffold(
@@ -144,6 +166,10 @@ class _TasksPageState extends State<TasksPage> {
                                         task: t,
                                         onToggle: () => _patch(t, {'status': 'done'}),
                                         onDelete: () => _delete(t),
+                                        onSetDate: () => _editDate(t),
+                                        onClearDate: t.dueDate != null
+                                            ? () => _patch(t, {'due_date': null})
+                                            : null,
                                       ))
                                   .toList(),
                             ),
@@ -292,7 +318,15 @@ class _TaskTile extends StatelessWidget {
   final _Task task;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
-  const _TaskTile({required this.task, required this.onToggle, required this.onDelete});
+  final VoidCallback? onSetDate;
+  final VoidCallback? onClearDate;
+  const _TaskTile({
+    required this.task,
+    required this.onToggle,
+    required this.onDelete,
+    this.onSetDate,
+    this.onClearDate,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -319,6 +353,20 @@ class _TaskTile extends StatelessWidget {
           ),
         ),
         subtitle: isDone ? null : _TaskMeta(task: task),
+        trailing: onSetDate == null
+            ? null
+            : PopupMenuButton<String>(
+                icon: Icon(Icons.event_outlined, size: 20,
+                    color: task.dueDate != null ? colors.primary : colors.outline),
+                tooltip: 'Fecha límite',
+                onSelected: (v) => v == 'set' ? onSetDate!() : onClearDate?.call(),
+                itemBuilder: (_) => [
+                  PopupMenuItem(value: 'set',
+                      child: Text(task.dueDate == null ? 'Añadir fecha' : 'Cambiar fecha')),
+                  if (task.dueDate != null && onClearDate != null)
+                    const PopupMenuItem(value: 'clear', child: Text('Quitar fecha')),
+                ],
+              ),
       ),
     );
   }
