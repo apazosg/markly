@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../shared/api_service.dart';
+import '../../shared/reminder_service.dart';
 
 class TasksPage extends StatefulWidget {
   const TasksPage({super.key});
@@ -29,6 +30,7 @@ class _TasksPageState extends State<TasksPage> {
           _tasks = data.map(_Task.fromJson).toList();
           _loading = false;
         });
+        ReminderService.instance.evaluate(data);
       }
     } catch (_) {
       if (mounted) setState(() { _loading = false; _error = 'No se pudieron cargar las tareas'; });
@@ -45,6 +47,8 @@ class _TasksPageState extends State<TasksPage> {
         final i = _tasks.indexWhere((t) => t.id == task.id);
         if (i >= 0) _tasks[i] = _Task.fromJson(updated);
       });
+      // Editar una fecha ya vencida/hoy debe poder avisar al momento.
+      if (patch.containsKey('due_date')) ReminderService.instance.syncFromApi();
     } catch (_) {
       _snack('No se pudo actualizar la tarea');
     }

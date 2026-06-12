@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,6 +9,7 @@ import 'features/chat/chat_page.dart';
 import 'features/tasks/tasks_page.dart';
 import 'features/account/account_page.dart';
 import 'features/auth/login_page.dart';
+import 'shared/reminder_service.dart';
 import 'shared/theme.dart';
 import 'shared/update_service.dart';
 
@@ -17,6 +20,7 @@ class RecorderApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Markly',
+      scaffoldMessengerKey: ReminderService.messengerKey,
       theme: AppTheme.dark,
       debugShowCheckedModeBanner: false,
       home: StreamBuilder<User?>(
@@ -93,6 +97,7 @@ class _MainShell extends StatefulWidget {
 class _MainShellState extends State<_MainShell> {
   int _selectedIndex = 0;
   UpdateInfo? _pendingUpdate;
+  Timer? _reminderTimer;
 
   static const _pages = [RecordingPage(), HistoryPage(), ChatPage(), TasksPage(), AccountPage()];
 
@@ -100,6 +105,20 @@ class _MainShellState extends State<_MainShell> {
   void initState() {
     super.initState();
     _checkUpdate();
+    _initReminders();
+  }
+
+  Future<void> _initReminders() async {
+    await ReminderService.instance.init();
+    await ReminderService.instance.syncFromApi();
+    _reminderTimer = Timer.periodic(
+        const Duration(minutes: 30), (_) => ReminderService.instance.syncFromApi());
+  }
+
+  @override
+  void dispose() {
+    _reminderTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkUpdate() async {

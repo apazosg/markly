@@ -23,6 +23,8 @@ dependencies:
   url_launcher: ^6.3.0
   package_info_plus: ^10.1.0
   flutter_markdown_plus: ^1.0.7
+  flutter_local_notifications: ^18.0.1
+  shared_preferences: ^2.3.2
 
 
 dev_dependencies:
