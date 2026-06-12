@@ -37,6 +37,10 @@ jobs:
         run: flutter pub get
 
       - name: Build Windows release
+        # firebase_cpp_sdk trae un cmake_minimum_required < 3.5; CMake 4.x (runner)
+        # eliminó esa compatibilidad. Forzamos la política mínima a 3.5.
+        env:
+          CMAKE_POLICY_VERSION_MINIMUM: '3.5'
         run: >
           flutter build windows --release
           --dart-define=API_BASE_URL=${{ inputs.api_base_url || 'https://markly.adriangp.com' }}
