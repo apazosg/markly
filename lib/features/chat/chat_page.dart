@@ -1,9 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import '../../shared/api_service.dart';
+import '../../shared/markdown.dart';
 import '../history/transcript_page.dart';
 
 class ChatPage extends StatefulWidget {
@@ -371,8 +374,34 @@ class _MessageBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(message.content,
-                style: TextStyle(color: isUser ? colors.onPrimary : colors.onSurface)),
+            if (isUser)
+              Text(message.content, style: TextStyle(color: colors.onPrimary))
+            else
+              MarkdownBody(
+                data: normalizeMarkdown(message.content),
+                selectable: true,
+                styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                  p: TextStyle(color: colors.onSurface),
+                  listBullet: TextStyle(color: colors.onSurface),
+                ),
+              ),
+            if (!isUser && message.content.trim().isNotEmpty)
+              Align(
+                alignment: Alignment.centerRight,
+                child: InkWell(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: message.content));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Copiado'), duration: Duration(seconds: 1)),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(6),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Icon(Icons.copy_outlined, size: 16, color: colors.outline),
+                  ),
+                ),
+              ),
             if (message.sources.isNotEmpty) ...[
               const SizedBox(height: 8),
               Wrap(
