@@ -125,6 +125,7 @@ class _HistoryPageState extends State<HistoryPage> {
         if (sid == null || !serverMap.containsKey(sid)) continue;
         final s = serverMap[sid]!;
         session.transcriptStatus = s['transcript_status'] as String?;
+        session.summaryStatus = s['summary_status'] as String?;
         session.meta.title ??= s['title'] as String?;
         if (session.meta.labels.isEmpty) {
           session.meta.labels = (s['labels'] as List?)?.cast<String>() ?? [];
@@ -143,6 +144,7 @@ class _HistoryPageState extends State<HistoryPage> {
           notes: _notesFromServer(s),
           meta: _metaFromServer(s),
           transcriptStatus: s['transcript_status'] as String?,
+          summaryStatus: s['summary_status'] as String?,
         ));
       }
     } catch (_) {
@@ -282,9 +284,16 @@ class _HistoryPageState extends State<HistoryPage> {
       while (mounted) {
         await Future.delayed(const Duration(seconds: 2));
         final data = await ApiService().getSession(session.serverId!);
-        final status = data['transcript_status'] as String?;
-        if (status != 'pending') {
-          if (mounted) setState(() { session.transcriptStatus = status; session.reprocessing = false; });
+        final tStatus = data['transcript_status'] as String?;
+        final sStatus = data['summary_status'] as String?;
+        if (tStatus != 'pending' && sStatus != 'pending') {
+          if (mounted) {
+            setState(() {
+              session.transcriptStatus = tStatus;
+              session.summaryStatus = sStatus;
+              session.reprocessing = false;
+            });
+          }
           break;
         }
       }
@@ -477,6 +486,7 @@ class _Session {
   bool reprocessing = false;
   SessionMetadata meta;
   String? transcriptStatus;
+  String? summaryStatus;
 
   _Session({
     required this.localId,
@@ -487,6 +497,7 @@ class _Session {
     required this.notes,
     required this.meta,
     this.transcriptStatus,
+    this.summaryStatus,
   });
 
   bool get isUploaded => serverId != null;
@@ -815,8 +826,19 @@ class _CardSubtitle extends StatelessWidget {
       '$n nota${n != 1 ? 's' : ''}',
     ].join(' · ');
 
+    final status = _statusLine(colors);
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(metaLine, style: style),
+      if (status != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(status.$2, size: 13, color: status.$3),
+            const SizedBox(width: 4),
+            Text(status.$1, style: TextStyle(fontSize: 12, color: status.$3, fontWeight: FontWeight.w500)),
+          ]),
+        ),
       if (session.meta.labels.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(top: 4),
@@ -833,5 +855,17 @@ class _CardSubtitle extends StatelessWidget {
           ),
         ),
     ]);
+  }
+
+  // (texto, icono, color) del estado de procesado; null cuando ya está todo listo.
+  (String, IconData, Color)? _statusLine(ColorScheme colors) {
+    if (!session.isUploaded && !session.isRemoteOnly) return null;
+    final t = session.transcriptStatus;
+    final s = session.summaryStatus;
+    if (t == 'pending') return ('Transcribiendo…', Icons.graphic_eq, colors.primary);
+    if (t == 'error') return ('Error de transcripción', Icons.error_outline, colors.error);
+    if (s == 'pending') return ('Resumiendo…', Icons.auto_awesome, colors.primary);
+    if (s == 'error') return ('Resumen pendiente · re-analizar', Icons.auto_awesome_outlined, colors.error);
+    return null;
   }
 }

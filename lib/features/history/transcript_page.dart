@@ -32,6 +32,9 @@ class _TranscriptPageState extends State<TranscriptPage>
 
   // Datos del servidor
   String? _summary;
+  String? _summaryStatus;
+  String? _summaryError;
+  bool _retryingSummary = false;
   List<String> _topics = [];
   List<_Utterance> _utterances = [];
 
@@ -133,6 +136,8 @@ class _TranscriptPageState extends State<TranscriptPage>
       setState(() {
         _meta = meta;
         _summary = data['summary'] as String?;
+        _summaryStatus = data['summary_status'] as String?;
+        _summaryError = data['summary_error'] as String?;
         _topics = (data['topics'] as List?)?.cast<String>() ?? [];
         _utterances = utterances;
         _recordingNotes = recordingNotes;
@@ -520,11 +525,33 @@ class _TranscriptPageState extends State<TranscriptPage>
 
   Widget _summaryTab() => _SummaryTab(
     summary: _summary,
+    summaryStatus: _summaryStatus,
+    summaryError: _summaryError,
+    retrying: _retryingSummary,
+    onRetry: _retrySummary,
     topics: _topics,
     utterances: _utterances,
     speakerNames: _meta.speakerNames,
     onTapSpeaker: _renameSpeaker,
   );
+
+  Future<void> _retrySummary() async {
+    setState(() => _retryingSummary = true);
+    try {
+      await ApiService().reprocessSession(widget.serverId);
+      while (mounted) {
+        await Future.delayed(const Duration(seconds: 2));
+        final data = await ApiService().getSession(widget.serverId);
+        if ((data['summary_status'] as String?) != 'pending') break;
+      }
+    } catch (_) {
+      // Se refleja al recargar; si falló, summary_status volverá como 'error'.
+    }
+    if (mounted) {
+      setState(() => _retryingSummary = false);
+      await _load();
+    }
+  }
 
   Widget _notesTab() {
     return ListView(
@@ -665,6 +692,10 @@ class _TranscriptPageState extends State<TranscriptPage>
 
 class _SummaryTab extends StatelessWidget {
   final String? summary;
+  final String? summaryStatus;
+  final String? summaryError;
+  final bool retrying;
+  final Future<void> Function() onRetry;
   final List<String> topics;
   final List<_Utterance> utterances;
   final Map<String, String> speakerNames;
@@ -672,6 +703,10 @@ class _SummaryTab extends StatelessWidget {
 
   const _SummaryTab({
     required this.summary,
+    required this.summaryStatus,
+    required this.summaryError,
+    required this.retrying,
+    required this.onRetry,
     required this.topics,
     required this.utterances,
     required this.speakerNames,
@@ -680,6 +715,37 @@ class _SummaryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // El resumen (Gemini) va por separado de la transcripción (Deepgram): la
+    // transcripción ya se muestra aunque el resumen siga en marcha o haya fallado.
+    if (retrying || summaryStatus == 'pending') {
+      return Center(child: Column(mainAxisSize: MainAxisSize.min, children: const [
+        CircularProgressIndicator(),
+        SizedBox(height: 16),
+        Text('Generando resumen…'),
+      ]));
+    }
+    if (summaryStatus == 'error') {
+      return Center(child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.error_outline, size: 48, color: Theme.of(context).colorScheme.error),
+          const SizedBox(height: 12),
+          const Text('No se pudo generar el resumen', textAlign: TextAlign.center),
+          if (summaryError != null) ...[
+            const SizedBox(height: 8),
+            Text(summaryError!, textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline)),
+          ],
+          const SizedBox(height: 16),
+          FilledButton.tonalIcon(
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('Reintentar resumen'),
+            onPressed: onRetry,
+          ),
+        ]),
+      ));
+    }
+
     final speakerSeconds = <String, double>{};
     for (final u in utterances) {
       speakerSeconds[u.speaker] = (speakerSeconds[u.speaker] ?? 0) + (u.end - u.start);
