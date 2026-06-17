@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 import '../../shared/api_service.dart';
 import '../../shared/csv_service.dart';
+import '../../shared/foreground_service.dart';
 import '../../shared/metadata_service.dart';
 import 'transcript_page.dart';
 import '../../shared/file_service.dart';
@@ -220,6 +221,9 @@ class _HistoryPageState extends State<HistoryPage> {
   Future<void> _uploadSession(_Session session) async {
     setState(() { session.uploading = true; session.uploadProgress = 0; });
     int lastPct = -1;
+    // Foreground service tipo dataSync: evita que Android suspenda el proceso si
+    // el usuario minimiza la app durante la subida (cortaba el socket → error).
+    await ForegroundService.start('Subiendo grabación…', type: 'dataSync');
     try {
       final serverId = await ApiService().uploadSession(
           session.audioPath!, session.notesPath!,
@@ -239,6 +243,8 @@ class _HistoryPageState extends State<HistoryPage> {
     } catch (e) {
       setState(() => session.uploading = false);
       _showError('Error al subir: $e');
+    } finally {
+      await ForegroundService.stop();
     }
   }
 

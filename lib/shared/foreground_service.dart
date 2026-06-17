@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 class ForegroundService {
   static const _channel = MethodChannel('com.adriangp.markly/foreground');
 
-  static Future<void> start(String text) async {
+  static Future<void> start(String text, {String type = 'microphone'}) async {
     if (!Platform.isAndroid) return;
-    await _channel.invokeMethod('start', {'text': text});
+    await _channel.invokeMethod('start', {'text': text, 'type': type});
   }
 
   static Future<void> update(String text) async {

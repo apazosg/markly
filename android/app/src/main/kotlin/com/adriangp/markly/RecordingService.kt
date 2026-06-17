@@ -2,6 +2,7 @@ package com.adriangp.markly
 
 import android.app.*
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
@@ -15,6 +16,8 @@ class RecordingService : Service() {
         const val ACTION_UPDATE = "UPDATE"
         const val ACTION_STOP = "STOP"
         const val EXTRA_TEXT = "text"
+        const val EXTRA_TYPE = "type"
+        const val TYPE_DATA_SYNC = "dataSync"
     }
 
     override fun onCreate() {
@@ -37,7 +40,17 @@ class RecordingService : Service() {
         when (intent?.action) {
             ACTION_START -> {
                 val text = intent.getStringExtra(EXTRA_TEXT) ?: "Grabando…"
-                startForeground(NOTIFICATION_ID, buildNotification(text))
+                val notification = buildNotification(text)
+                // La subida usa el tipo dataSync para sobrevivir en background sin
+                // requerir la precondición de micro activo (que Android 14+ exige al
+                // tipo microphone). La grabación mantiene su tipo del manifest.
+                if (intent.getStringExtra(EXTRA_TYPE) == TYPE_DATA_SYNC &&
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(NOTIFICATION_ID, notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                } else {
+                    startForeground(NOTIFICATION_ID, notification)
+                }
             }
             ACTION_UPDATE -> {
                 val text = intent.getStringExtra(EXTRA_TEXT) ?: ""
