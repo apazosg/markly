@@ -37,6 +37,8 @@ target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib")
 # Captura WASAPI (wasapi_recorder.cpp): COM / MMDevice API.
 target_link_libraries(${BINARY_NAME} PRIVATE "ole32.lib")
+# Codificación AAC -> .m4a vía Media Foundation (sin dependencias externas).
+target_link_libraries(${BINARY_NAME} PRIVATE "mfplat.lib" "mfreadwrite.lib" "mfuuid.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # Run the Flutter tool portions of the build. This must not be removed.

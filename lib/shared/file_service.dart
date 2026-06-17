@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
@@ -12,8 +11,9 @@ class FileService {
     final id = _idFormat.format(DateTime.now());
     final dir = p.join(base.path, 'Markly', 'sessions', id);
     await Directory(dir).create(recursive: true);
-    // WAV en Windows: Media Foundation no soporta AAC 16kHz mono de forma fiable
-    final audioExt = (!kIsWeb && Platform.isWindows) ? 'wav' : 'm4a';
+    // Windows codifica AAC .m4a vía Media Foundation a 48 kHz (16 kHz no va fiable
+    // en MF, pero 48 kHz sí). Android graba AAC .m4a directamente.
+    const audioExt = 'm4a';
     return SessionPaths(
       sessionId: id,
       sessionDir: dir,
