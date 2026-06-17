@@ -127,6 +127,7 @@ class _HistoryPageState extends State<HistoryPage> {
         final s = serverMap[sid]!;
         session.transcriptStatus = s['transcript_status'] as String?;
         session.summaryStatus = s['summary_status'] as String?;
+        session.audioAvailable = (s['audio_available'] as bool?) ?? true;
         session.meta.title ??= s['title'] as String?;
         if (session.meta.labels.isEmpty) {
           session.meta.labels = (s['labels'] as List?)?.cast<String>() ?? [];
@@ -146,6 +147,7 @@ class _HistoryPageState extends State<HistoryPage> {
           meta: _metaFromServer(s),
           transcriptStatus: s['transcript_status'] as String?,
           summaryStatus: s['summary_status'] as String?,
+          audioAvailable: (s['audio_available'] as bool?) ?? true,
         ));
       }
     } catch (_) {
@@ -193,6 +195,29 @@ class _HistoryPageState extends State<HistoryPage> {
         }
       }
     }
+    _load();
+  }
+
+  // Borra solo los archivos locales (audio + notas). La reunión sigue en el
+  // servidor: tras recargar, la sesión aparece como remota. No toca el servidor.
+  Future<void> _deleteLocalRecording(_Session session) async {
+    if (session.sessionDir == null) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Borrar audio del dispositivo'),
+        content: const Text(
+          'Se borrará el audio y las notas de este dispositivo. '
+          'La reunión (transcripción, resumen y notas) se conserva en la nube.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Borrar')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await Directory(session.sessionDir!).delete(recursive: true);
     _load();
   }
 
@@ -295,7 +320,22 @@ class _HistoryPageState extends State<HistoryPage> {
   Future<void> _reprocessSession(_Session session) async {
     setState(() => session.reprocessing = true);
     try {
-      await ApiService().reprocessSession(session.serverId!);
+      // Si el servidor ya purgó el audio y la transcripción falló, re-subimos la
+      // copia local (bajo foreground service, como la subida normal); en cualquier
+      // otro caso el reproceso es server-side (re-transcribir o solo re-resumir).
+      final needsReupload = !session.audioAvailable &&
+          session.transcriptStatus != 'done' &&
+          session.hasLocalAudio;
+      if (needsReupload) {
+        await ForegroundService.start('Subiendo grabación…', type: 'dataSync');
+        try {
+          await ApiService().reattachAudio(session.serverId!, session.audioPath!);
+        } finally {
+          await ForegroundService.stop();
+        }
+      } else {
+        await ApiService().reprocessSession(session.serverId!);
+      }
       while (mounted) {
         await Future.delayed(const Duration(seconds: 2));
         final data = await ApiService().getSession(session.serverId!);
@@ -467,13 +507,25 @@ class _HistoryPageState extends State<HistoryPage> {
                                 : null,
                             onTapInSelectMode: () => _toggleSelect(s),
                             onDelete: () => _deleteSession(s),
+                            // Solo cuando ya está procesada (transcript + resumen) y
+                            // aún quedan archivos locales que liberar.
+                            onDeleteLocal: s.isUploaded &&
+                                    s.sessionDir != null &&
+                                    s.transcriptStatus == 'done' &&
+                                    s.summaryStatus == 'done'
+                                ? () => _deleteLocalRecording(s)
+                                : null,
                             onUpload: s.isUploaded || s.uploading || s.isRemoteOnly
                                 ? null
                                 : () => _uploadSession(s),
                             onViewTranscript: s.isUploaded ? () => _openTranscript(s) : null,
-                            onReprocess: s.isUploaded &&
-                                    (s.transcriptStatus == 'done' || s.transcriptStatus == 'error') &&
-                                    !s.reprocessing
+                            // Con transcript hecho: siempre (re-resumen, sin audio).
+                            // En 'error' hace falta re-transcribir → necesita audio
+                            // en el servidor o, si se purgó, copia local para re-subir.
+                            onReprocess: s.isUploaded && !s.reprocessing &&
+                                    (s.transcriptStatus == 'done' ||
+                                        (s.transcriptStatus == 'error' &&
+                                            (s.audioAvailable || s.hasLocalAudio)))
                                 ? () => _reprocessSession(s)
                                 : null,
                             onEditTitle: () => _editTitle(s),
@@ -503,6 +555,9 @@ class _Session {
   SessionMetadata meta;
   String? transcriptStatus;
   String? summaryStatus;
+  // False cuando el audio ya no está en el servidor (purgado por retención):
+  // se puede re-resumir pero no re-transcribir.
+  bool audioAvailable;
 
   _Session({
     required this.localId,
@@ -514,10 +569,12 @@ class _Session {
     required this.meta,
     this.transcriptStatus,
     this.summaryStatus,
+    this.audioAvailable = true,
   });
 
   bool get isUploaded => serverId != null;
   bool get isRemoteOnly => sessionDir == null;
+  bool get hasLocalAudio => audioPath != null;
 
   String get displayTitle => meta.title ?? _dateLabel;
 
@@ -660,6 +717,7 @@ class _SessionCard extends StatelessWidget {
   final VoidCallback? onLongPress;
   final VoidCallback? onTapInSelectMode;
   final VoidCallback? onDelete;
+  final VoidCallback? onDeleteLocal;
   final VoidCallback? onUpload;
   final VoidCallback? onViewTranscript;
   final VoidCallback? onReprocess;
@@ -675,6 +733,7 @@ class _SessionCard extends StatelessWidget {
     this.onLongPress,
     this.onTapInSelectMode,
     this.onDelete,
+    this.onDeleteLocal,
     this.onUpload,
     this.onViewTranscript,
     this.onReprocess,
@@ -797,6 +856,12 @@ class _SessionCard extends StatelessWidget {
                   icon: const Icon(Icons.share, size: 20),
                   tooltip: 'Compartir',
                   onPressed: _share,
+                ),
+              if (onDeleteLocal != null)
+                IconButton(
+                  icon: const Icon(Icons.phonelink_erase_outlined, size: 20),
+                  tooltip: 'Borrar audio del dispositivo (la reunión se conserva en la nube)',
+                  onPressed: onDeleteLocal,
                 ),
               IconButton(
                 icon: Icon(Icons.delete_outline, size: 20, color: colors.error),
