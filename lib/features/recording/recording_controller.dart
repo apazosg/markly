@@ -77,7 +77,9 @@ class RecordingController extends ChangeNotifier {
         _wasapiActive = true;
       } else {
         await _recorder.start(
-          const RecordConfig(encoder: AudioEncoder.aacLc, sampleRate: 16000, numChannels: 1),
+          // 32 kbps: voz a 16 kHz mono, suficiente para transcripción/diarización.
+          // Mantiene reuniones largas bajo el tope de subida de Cloudflare (~7 h en 100 MB).
+          const RecordConfig(encoder: AudioEncoder.aacLc, sampleRate: 16000, numChannels: 1, bitRate: 32000),
           path: _audioPath!,
         );
         _ampSub = _recorder.onAmplitudeChanged(const Duration(milliseconds: 100)).listen((amp) {
