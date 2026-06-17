@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
 import '../../shared/api_service.dart';
 import '../../shared/csv_service.dart';
+import '../../shared/foreground_service.dart';
 import '../../shared/metadata_service.dart';
 import 'transcript_page.dart';
 import '../../shared/file_service.dart';
@@ -220,6 +221,9 @@ class _HistoryPageState extends State<HistoryPage> {
   Future<void> _uploadSession(_Session session) async {
     setState(() { session.uploading = true; session.uploadProgress = 0; });
     int lastPct = -1;
+    // Foreground service tipo dataSync: evita que Android suspenda el proceso si
+    // el usuario minimiza la app durante la subida (cortaba el socket → error).
+    await ForegroundService.start('Subiendo grabación…', type: 'dataSync');
     try {
       final serverId = await ApiService().uploadSession(
           session.audioPath!, session.notesPath!,
@@ -239,6 +243,8 @@ class _HistoryPageState extends State<HistoryPage> {
     } catch (e) {
       setState(() => session.uploading = false);
       _showError('Error al subir: $e');
+    } finally {
+      await ForegroundService.stop();
     }
   }
 
@@ -689,7 +695,6 @@ class _SessionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final notes = session.notes;
 
     return GestureDetector(
       onLongPress: onLongPress,
@@ -713,25 +718,6 @@ class _SessionCard extends StatelessWidget {
         title: Text(session.displayTitle, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: _CardSubtitle(session: session),
         children: [
-          // ── Notas ──
-          if (notes.isEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Text('Sin notas', style: TextStyle(fontSize: 13, color: colors.outline)),
-            )
-          else
-            ...notes.map((note) => ListTile(
-              dense: true,
-              leading: Text(note.formattedTimestamp,
-                  style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: colors.primary)),
-              title: note.title != null
-                  ? Text(note.title!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))
-                  : null,
-              subtitle: Text(note.text, style: const TextStyle(fontSize: 13)),
-            )),
-
-          const Divider(height: 1, indent: 16, endIndent: 16),
-
           // ── Acciones de edición ──
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),

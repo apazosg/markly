@@ -18,6 +18,7 @@ class MainActivity : FlutterActivity() {
                     "start" -> {
                         intent.action = RecordingService.ACTION_START
                         intent.putExtra(RecordingService.EXTRA_TEXT, call.argument<String>("text") ?: "Grabando…")
+                        call.argument<String>("type")?.let { intent.putExtra(RecordingService.EXTRA_TYPE, it) }
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
                         else startService(intent)
                         result.success(null)
