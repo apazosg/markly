@@ -695,7 +695,6 @@ class _SessionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final notes = session.notes;
 
     return GestureDetector(
       onLongPress: onLongPress,
@@ -719,25 +718,6 @@ class _SessionCard extends StatelessWidget {
         title: Text(session.displayTitle, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: _CardSubtitle(session: session),
         children: [
-          // ── Notas ──
-          if (notes.isEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: Text('Sin notas', style: TextStyle(fontSize: 13, color: colors.outline)),
-            )
-          else
-            ...notes.map((note) => ListTile(
-              dense: true,
-              leading: Text(note.formattedTimestamp,
-                  style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: colors.primary)),
-              title: note.title != null
-                  ? Text(note.title!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))
-                  : null,
-              subtitle: Text(note.text, style: const TextStyle(fontSize: 13)),
-            )),
-
-          const Divider(height: 1, indent: 16, endIndent: 16),
-
           // ── Acciones de edición ──
           Padding(
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
