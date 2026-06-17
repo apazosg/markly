@@ -59,6 +59,20 @@ class ApiService {
     return (jsonDecode(body) as Map<String, dynamic>)['id'] as String;
   }
 
+  /// Re-sube el audio local de una sesión existente (cuyo original purgó la
+  /// retención del servidor) y dispara una nueva transcripción.
+  Future<void> reattachAudio(String serverId, String audioPath,
+      {void Function(double progress)? onProgress}) async {
+    final token = await _token();
+    final request = _ProgressMultipartRequest('POST', Uri.parse('$_baseUrl/sessions/$serverId/audio'),
+        onProgress: onProgress)
+      ..headers['Authorization'] = 'Bearer $token'
+      ..files.add(await http.MultipartFile.fromPath('audio', audioPath));
+    final streamed = await request.send();
+    final body = await streamed.stream.bytesToString();
+    if (streamed.statusCode != 200) throw HttpException('Error ${streamed.statusCode}: $body');
+  }
+
   Future<void> deleteSession(String serverId) async {
     final token = await _token();
     final response = await http.delete(
