@@ -75,6 +75,7 @@ class _RecordingPageState extends State<RecordingPage> {
     final dir = p.dirname(result.audioPath);
     final meta = await MetadataService.read(dir);
     meta.durationMs = result.durationMs;
+    if (result.title != null) meta.title = result.title;
     await MetadataService.write(dir, meta);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,6 +97,29 @@ class _RecordingPageState extends State<RecordingPage> {
         duration: const Duration(seconds: 3),
       ),
     );
+  }
+
+  Future<void> _editSessionTitle() async {
+    final ctrl = TextEditingController(text: _controller.title ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Título de la grabación'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Ej: Reunión de sprint'),
+          textCapitalization: TextCapitalization.sentences,
+          onSubmitted: (_) => Navigator.pop(ctx, ctrl.text),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('Guardar')),
+        ],
+      ),
+    );
+    ctrl.dispose();
+    if (result != null) _controller.setTitle(result);
   }
 
   Future<void> _editNoteTitle(int index) async {
@@ -147,6 +171,8 @@ class _RecordingPageState extends State<RecordingPage> {
       body: Column(
         children: [
           _TimerDisplay(controller: _controller),
+          if (isActive)
+            _SessionTitle(title: _controller.title, onEdit: _editSessionTitle),
           if (state == RecordingState.recording)
             _AmplitudeBar(level: _controller.amplitudeLevel),
           if (!isActive && _controller.systemAudioSupported)
@@ -241,6 +267,49 @@ class _StatusBadge extends StatelessWidget {
       RecordingState.paused => Text('EN PAUSA', style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.tertiary)),
       RecordingState.idle => Text('LISTO', style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.outline)),
     };
+  }
+}
+
+// ── Session title ───────────────────────────────────────────────────────────
+
+class _SessionTitle extends StatelessWidget {
+  final String? title;
+  final VoidCallback onEdit;
+  const _SessionTitle({required this.title, required this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasTitle = title != null && title!.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: InkWell(
+        onTap: onEdit,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  hasTitle ? title! : 'Añadir título…',
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: hasTitle ? theme.colorScheme.onSurface : theme.colorScheme.outline,
+                    fontWeight: hasTitle ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(Icons.edit_outlined, size: 16, color: theme.colorScheme.outline),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

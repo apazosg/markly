@@ -26,6 +26,7 @@ class RecordingController extends ChangeNotifier {
   double _amplitude = -60.0; // dBFS, plataformas no-Windows
   double _winLevel = 0.0; // 0–1, Windows (nativo)
   int? _pendingTimestampMs;
+  String? _title;
   String? _audioPath;
   String? _notesPath;
   Timer? _timer;
@@ -39,6 +40,7 @@ class RecordingController extends ChangeNotifier {
   bool get canAddNote => _state != RecordingState.idle;
   bool get hasPendingTimestamp => _pendingTimestampMs != null;
   int? get pendingTimestampMs => _pendingTimestampMs;
+  String? get title => _title;
 
   // Nivel 0–1 para el medidor. En Windows lo da el nativo; en el resto se deriva
   // del dBFS (silencio ≈ -60 dBFS).
@@ -50,6 +52,12 @@ class RecordingController extends ChangeNotifier {
 
   void setCaptureSystemAudio(bool value) {
     _captureSystemAudio = value;
+    notifyListeners();
+  }
+
+  void setTitle(String? value) {
+    final trimmed = value?.trim();
+    _title = (trimmed == null || trimmed.isEmpty) ? null : trimmed;
     notifyListeners();
   }
 
@@ -66,6 +74,7 @@ class RecordingController extends ChangeNotifier {
     _audioPath = paths.audioPath;
     _notesPath = paths.notesPath;
     _notes = [];
+    _title = null;
     _elapsed = Duration.zero;
     _amplitude = -60.0;
     _winLevel = 0.0;
@@ -124,7 +133,7 @@ class RecordingController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<({String audioPath, String notesPath, int durationMs})?> stopRecording() async {
+  Future<({String audioPath, String notesPath, int durationMs, String? title})?> stopRecording() async {
     if (_state == RecordingState.idle) return null;
     _timer?.cancel();
     await _ampSub?.cancel();
@@ -141,11 +150,12 @@ class RecordingController extends ChangeNotifier {
 
     if (_notesPath != null) await CsvService.write(_notesPath!, _notes);
 
-    final result = (audioPath: _audioPath!, notesPath: _notesPath!, durationMs: _elapsed.inMilliseconds);
+    final result = (audioPath: _audioPath!, notesPath: _notesPath!, durationMs: _elapsed.inMilliseconds, title: _title);
 
     _state = RecordingState.idle;
     _elapsed = Duration.zero;
     _notes = [];
+    _title = null;
     _amplitude = -60.0;
     _winLevel = 0.0;
     _pendingTimestampMs = null;
