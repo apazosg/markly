@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -41,9 +42,10 @@ class ApiService {
   }
 
   Future<String> uploadSession(String audioPath, String notesPath,
-      {List<String> labels = const []}) async {
+      {List<String> labels = const [], void Function(double progress)? onProgress}) async {
     final token = await _token();
-    final request = http.MultipartRequest('POST', Uri.parse('$_baseUrl/sessions'))
+    final request = _ProgressMultipartRequest('POST', Uri.parse('$_baseUrl/sessions'),
+        onProgress: onProgress)
       ..headers['Authorization'] = 'Bearer $token'
       ..files.add(await http.MultipartFile.fromPath('audio', audioPath))
       ..files.add(await http.MultipartFile.fromPath('notes', notesPath));
@@ -169,5 +171,31 @@ class ApiService {
       body: jsonEncode(patch),
     );
     if (response.statusCode != 200) throw HttpException('Error ${response.statusCode}');
+  }
+}
+
+/// MultipartRequest que informa de los bytes enviados. `package:http` no expone
+/// progreso de subida, así que interceptamos finalize() y contamos el cuerpo a
+/// medida que el socket lo consume (≈ velocidad de red por backpressure).
+class _ProgressMultipartRequest extends http.MultipartRequest {
+  final void Function(double progress)? onProgress;
+
+  _ProgressMultipartRequest(super.method, super.url, {this.onProgress});
+
+  @override
+  http.ByteStream finalize() {
+    final byteStream = super.finalize();
+    final total = contentLength;
+    if (onProgress == null || total == 0) return byteStream;
+
+    int sent = 0;
+    final transformer = StreamTransformer<List<int>, List<int>>.fromHandlers(
+      handleData: (chunk, sink) {
+        sent += chunk.length;
+        onProgress!(sent / total);
+        sink.add(chunk);
+      },
+    );
+    return http.ByteStream(byteStream.transform(transformer));
   }
 }

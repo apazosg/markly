@@ -218,11 +218,20 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Future<void> _uploadSession(_Session session) async {
-    setState(() => session.uploading = true);
+    setState(() { session.uploading = true; session.uploadProgress = 0; });
+    int lastPct = -1;
     try {
       final serverId = await ApiService().uploadSession(
           session.audioPath!, session.notesPath!,
-          labels: session.meta.labels);
+          labels: session.meta.labels,
+          onProgress: (p) {
+            // Throttle: solo redibujar cuando cambia el porcentaje entero.
+            final pct = (p * 100).floor();
+            if (pct != lastPct && mounted) {
+              lastPct = pct;
+              setState(() => session.uploadProgress = p);
+            }
+          });
       await File(p.join(session.sessionDir!, '.uploaded')).writeAsString(serverId);
       setState(() { session.serverId = serverId; session.uploading = false; });
       // Push metadata already stored locally
@@ -483,6 +492,7 @@ class _Session {
   final String? sessionDir;
   final List<NoteEntry> notes;
   bool uploading = false;
+  double uploadProgress = 0; // 0..1 mientras uploading; 1 = enviado, esperando al servidor
   bool reprocessing = false;
   SessionMetadata meta;
   String? transcriptStatus;
@@ -744,9 +754,27 @@ class _SessionCard extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
             child: Row(children: [
               if (session.uploading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        // Determinado mientras sube; indeterminado al esperar al servidor.
+                        value: (session.uploadProgress > 0 && session.uploadProgress < 1)
+                            ? session.uploadProgress
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      session.uploadProgress >= 1
+                          ? 'Procesando…'
+                          : 'Subiendo ${(session.uploadProgress * 100).round()}%',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ]),
                 )
               else if (!session.isUploaded && !session.isRemoteOnly)
                 TextButton.icon(
