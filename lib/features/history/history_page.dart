@@ -626,6 +626,7 @@ SessionMetadata _metaFromServer(Map<String, dynamic> s) => SessionMetadata(
   title: s['title'] as String?,
   labels: (s['labels'] as List?)?.cast<String>() ?? [],
   speakerNames: (s['speaker_names'] as Map?)?.cast<String, String>() ?? {},
+  speakerNamesAuto: (s['speaker_names_auto'] as Map?)?.cast<String, String>() ?? {},
   durationMs: s['duration_ms'] as int?,
   transcriptNotes: ((s['transcript_notes'] as List?)?.cast<Map<String, dynamic>>() ?? [])
       .map((n) => NoteEntry(

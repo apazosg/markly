@@ -96,6 +96,10 @@ class _TranscriptPageState extends State<TranscriptPage>
         meta = _metaFromResponse(data);
         recordingNotes = _notesFromResponse(data);
       }
+      // Los nombres sugeridos por la IA son siempre del servidor (solo lectura),
+      // aunque el resto de la meta venga del fichero local.
+      meta.speakerNamesAuto =
+          (data['speaker_names_auto'] as Map?)?.cast<String, String>() ?? meta.speakerNamesAuto;
 
       final status = data['transcript_status'] as String?;
       if (status == 'pending') {
@@ -231,12 +235,21 @@ class _TranscriptPageState extends State<TranscriptPage>
   // ── Actions ───────────────────────────────────────────────────────────────
 
   Future<void> _renameSpeaker(String speakerId) async {
-    final current = _meta.speakerNames[speakerId] ?? '';
+    final current = _speakerName(speakerId) ?? '';
+    final wasAuto = _isAutoName(speakerId);
     final ctrl = TextEditingController(text: current);
     final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Hablante $speakerId'),
+        title: Row(children: [
+          Expanded(child: Text('Hablante $speakerId')),
+          if (wasAuto) ...[
+            _autoNameBadge(),
+            const SizedBox(width: 6),
+            Text('sugerido por IA',
+                style: TextStyle(fontSize: 11, color: Theme.of(ctx).colorScheme.outline)),
+          ],
+        ]),
         content: TextField(
           controller: ctrl, autofocus: true,
           decoration: const InputDecoration(hintText: 'Nombre del hablante'),
@@ -266,7 +279,7 @@ class _TranscriptPageState extends State<TranscriptPage>
     final action = await showDialog<String>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: Text(_meta.speakerNames[effectiveSpeaker] ?? 'Hablante $effectiveSpeaker'),
+        title: Text(_speakerLabel(effectiveSpeaker)),
         children: [
           SimpleDialogOption(
             onPressed: () => Navigator.pop(ctx, 'rename'),
@@ -304,12 +317,13 @@ class _TranscriptPageState extends State<TranscriptPage>
                   radius: 12,
                   backgroundColor: _colorFor(sid).withValues(alpha: 0.2),
                   child: Text(
-                    _meta.speakerNames[sid]?.substring(0, 1).toUpperCase() ?? sid,
+                    _speakerName(sid)?.substring(0, 1).toUpperCase() ?? sid,
                     style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _colorFor(sid)),
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text(_meta.speakerNames[sid] ?? 'Hablante $sid'),
+                Text(_speakerLabel(sid)),
+                if (_isAutoName(sid)) ...[const SizedBox(width: 4), _autoNameBadge()],
                 if (sid == current) ...[
                   const SizedBox(width: 6),
                   const Icon(Icons.check, size: 14),
@@ -532,6 +546,7 @@ class _TranscriptPageState extends State<TranscriptPage>
     topics: _topics,
     utterances: _utterances,
     speakerNames: _meta.speakerNames,
+    speakerNamesAuto: _meta.speakerNamesAuto,
     onTapSpeaker: _renameSpeaker,
   );
 
@@ -640,6 +655,15 @@ class _TranscriptPageState extends State<TranscriptPage>
   String _effectiveSpeaker(_Utterance u) =>
       _meta.speakerOverrides[_editKey(u.start)] ?? u.speaker;
 
+  // Nombre a mostrar para un hablante: el confirmado manda; si no, la sugerencia
+  // de la IA; si no, "Hablante N".
+  String? _speakerName(String sid) =>
+      _meta.speakerNames[sid] ?? _meta.speakerNamesAuto[sid];
+  String _speakerLabel(String sid) => _speakerName(sid) ?? 'Hablante $sid';
+  // True cuando el nombre lo sugirió la IA y el usuario no lo ha confirmado (lleva ⭐).
+  bool _isAutoName(String sid) =>
+      !_meta.speakerNames.containsKey(sid) && _meta.speakerNamesAuto.containsKey(sid);
+
   // Una intervención es "continuación" si el item anterior es del mismo
   // hablante (una nota o corte de párrafo intermedios la rompen).
   bool _continuesSpeaker(int idx) {
@@ -658,7 +682,8 @@ class _TranscriptPageState extends State<TranscriptPage>
           continuation: _continuesSpeaker(idx),
           effectiveSpeaker: _meta.speakerOverrides[_editKey(u.utterance.start)],
           editedText: _meta.utteranceEdits[_editKey(u.utterance.start)],
-          speakerName: _meta.speakerNames[_meta.speakerOverrides[_editKey(u.utterance.start)] ?? u.utterance.speaker],
+          speakerName: _speakerName(_meta.speakerOverrides[_editKey(u.utterance.start)] ?? u.utterance.speaker),
+          isAutoName: _isAutoName(_meta.speakerOverrides[_editKey(u.utterance.start)] ?? u.utterance.speaker),
           searchQuery: _searchQuery,
           isCurrentMatch: isCurrentMatch,
           onTapSpeaker: () => _onTapSpeaker(u.utterance),
@@ -699,6 +724,7 @@ class _SummaryTab extends StatelessWidget {
   final List<String> topics;
   final List<_Utterance> utterances;
   final Map<String, String> speakerNames;
+  final Map<String, String> speakerNamesAuto;
   final void Function(String speakerId)? onTapSpeaker;
 
   const _SummaryTab({
@@ -710,6 +736,7 @@ class _SummaryTab extends StatelessWidget {
     required this.topics,
     required this.utterances,
     required this.speakerNames,
+    required this.speakerNamesAuto,
     this.onTapSpeaker,
   });
 
@@ -791,7 +818,8 @@ class _SummaryTab extends StatelessWidget {
           _SectionLabel('Hablantes'),
           const SizedBox(height: 8),
           ...sortedSpeakers.map((e) {
-            final name = speakerNames[e.key] ?? 'Hablante ${e.key}';
+            final name = speakerNames[e.key] ?? speakerNamesAuto[e.key] ?? 'Hablante ${e.key}';
+            final isAuto = !speakerNames.containsKey(e.key) && speakerNamesAuto.containsKey(e.key);
             final pct = total > 0 ? (e.value / total * 100).round() : 0;
             final color = _colorFor(e.key);
             final secs = e.value.round();
@@ -816,6 +844,7 @@ class _SummaryTab extends StatelessWidget {
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Row(children: [
                       Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      if (isAuto) ...[const SizedBox(width: 4), _autoNameBadge()],
                       const Spacer(),
                       Text(label, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline)),
                     ]),
@@ -840,6 +869,13 @@ class _SummaryTab extends StatelessWidget {
   }
 }
 
+// Marca de que el nombre del hablante lo sugirió la IA (no lo confirmó el usuario).
+// Para una estrella literal, cambiar Icons.auto_awesome por Icons.star.
+Widget _autoNameBadge() => const Tooltip(
+      message: 'Nombre sugerido por IA',
+      child: Icon(Icons.auto_awesome, size: 11, color: Color(0xFFFFB300)),
+    );
+
 class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
@@ -863,6 +899,7 @@ SessionMetadata _metaFromResponse(Map<String, dynamic> data) => SessionMetadata(
   title: data['title'] as String?,
   labels: (data['labels'] as List?)?.cast<String>() ?? [],
   speakerNames: (data['speaker_names'] as Map?)?.cast<String, String>() ?? {},
+  speakerNamesAuto: (data['speaker_names_auto'] as Map?)?.cast<String, String>() ?? {},
   utteranceEdits: (data['utterance_edits'] as Map?)?.cast<String, String>() ?? {},
   speakerOverrides: (data['speaker_overrides'] as Map?)?.cast<String, String>() ?? {},
   generalNotes: data['general_notes'] as String? ?? '',
@@ -981,6 +1018,7 @@ class _UtteranceTile extends StatelessWidget {
   final String? effectiveSpeaker;
   final String? editedText;
   final String? speakerName;
+  final bool isAutoName;
   final String searchQuery;
   final bool isCurrentMatch;
   final VoidCallback onTapSpeaker;
@@ -996,6 +1034,7 @@ class _UtteranceTile extends StatelessWidget {
     this.effectiveSpeaker,
     this.editedText,
     this.speakerName,
+    this.isAutoName = false,
     this.searchQuery = '',
     this.isCurrentMatch = false,
   });
@@ -1041,6 +1080,7 @@ class _UtteranceTile extends StatelessWidget {
             if (!continuation) ...[
               Row(children: [
                 Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+                if (isAutoName) ...[const SizedBox(width: 4), _autoNameBadge()],
                 if (isEdited) ...[
                   const SizedBox(width: 4),
                   Icon(Icons.edit, size: 10, color: Theme.of(context).colorScheme.outline),

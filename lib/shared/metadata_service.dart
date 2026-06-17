@@ -8,6 +8,9 @@ class SessionMetadata {
   String? title;
   List<String> labels;
   Map<String, String> speakerNames;
+  // Inferidos por la IA (solo lectura del servidor). Se muestran con ⭐ cuando el
+  // id no está confirmado en speakerNames; el nombre manual tiene prioridad.
+  Map<String, String> speakerNamesAuto;
   List<NoteEntry> transcriptNotes;
   Map<String, String> utteranceEdits;
   Map<String, String> speakerOverrides;
@@ -19,12 +22,14 @@ class SessionMetadata {
     this.durationMs,
     List<String>? labels,
     Map<String, String>? speakerNames,
+    Map<String, String>? speakerNamesAuto,
     List<NoteEntry>? transcriptNotes,
     Map<String, String>? utteranceEdits,
     Map<String, String>? speakerOverrides,
     String? generalNotes,
   })  : labels = labels ?? [],
         speakerNames = speakerNames ?? {},
+        speakerNamesAuto = speakerNamesAuto ?? {},
         transcriptNotes = transcriptNotes ?? [],
         utteranceEdits = utteranceEdits ?? {},
         speakerOverrides = speakerOverrides ?? {},
@@ -35,6 +40,7 @@ class SessionMetadata {
         durationMs: j['duration_ms'] as int?,
         labels: (j['labels'] as List?)?.cast<String>() ?? [],
         speakerNames: (j['speaker_names'] as Map?)?.cast<String, String>() ?? {},
+        speakerNamesAuto: (j['speaker_names_auto'] as Map?)?.cast<String, String>() ?? {},
         utteranceEdits: (j['utterance_edits'] as Map?)?.cast<String, String>() ?? {},
         speakerOverrides: (j['speaker_overrides'] as Map?)?.cast<String, String>() ?? {},
         generalNotes: j['general_notes'] as String? ?? '',
@@ -53,6 +59,7 @@ class SessionMetadata {
         if (durationMs != null) 'duration_ms': durationMs,
         'labels': labels,
         'speaker_names': speakerNames,
+        'speaker_names_auto': speakerNamesAuto,
         'utterance_edits': utteranceEdits,
         'speaker_overrides': speakerOverrides,
         'general_notes': generalNotes,
