@@ -1,4 +1,12 @@
+---
+id: search-pagination-ideas
+state: draft
+date: 2026-06-19
+---
+
 # Markly — Ideas: búsqueda, paginación y filtros vectoriales
+
+> Reubicado a `.agents/planning/` el 2026-06-19. Ideas/futuro, no implementado.
 
 Estado actual (2026-06-09): búsqueda client-side sobre sesiones ya cargadas en memoria.
 Funciona bien hasta ~50–100 sesiones. Este doc recoge lo que habría que construir cuando
