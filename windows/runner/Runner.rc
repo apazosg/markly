@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.recorder" "\0"
-            VALUE "FileDescription", "recorder" "\0"
+            VALUE "CompanyName", "Adrian Garrido Pazos" "\0"
+            VALUE "FileDescription", "Markly - grabadora de reuniones" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "recorder" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.recorder. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Adrian Garrido Pazos. All rights reserved." "\0"
             VALUE "OriginalFilename", "recorder.exe" "\0"
-            VALUE "ProductName", "recorder" "\0"
+            VALUE "ProductName", "Markly" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
