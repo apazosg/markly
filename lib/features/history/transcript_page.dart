@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import '../../shared/api_service.dart';
 import '../../shared/csv_service.dart';
@@ -791,6 +792,20 @@ class _SummaryTab extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         if (summary != null) ...[
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              icon: const Icon(Icons.copy_outlined, size: 18),
+              label: const Text('Copiar resumen'),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: summary!));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Resumen copiado'), duration: Duration(seconds: 1)),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 4),
           MarkdownBody(
             data: normalizeMarkdown(summary!),
             selectable: true,
