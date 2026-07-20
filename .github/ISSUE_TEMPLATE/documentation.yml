@@ -1,0 +1,29 @@
+name: "📚 Mejora de documentación"
+description: "Ayuda a mejorar la documentación."
+title: "[Docs]: "
+labels: ["type: documentation"]
+body:
+  - type: textarea
+    id: location
+    attributes:
+      label: "¿Qué documentación está afectada?"
+      description: "Enlace, ruta o sección si la conoces."
+      placeholder: ""
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: "¿Qué falta o no está claro?"
+      description: "Describe la dificultad encontrada."
+      placeholder: ""
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Mejora propuesta"
+      description: "Qué contenido o cambio ayudaría."
+      placeholder: ""
+    validations:
+      required: true

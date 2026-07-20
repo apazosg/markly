@@ -1,0 +1,29 @@
+name: "💡 Propuesta de mejora"
+description: "Sugiere cómo mejorar algo existente."
+title: "[Improvement]: "
+labels: ["type: improvement"]
+body:
+  - type: textarea
+    id: current
+    attributes:
+      label: "¿Qué experiencia actual mejorarías?"
+      description: "Describe la situación actual."
+      placeholder: ""
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Mejora propuesta"
+      description: "Explica el cambio que propones."
+      placeholder: ""
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: "Impacto esperado"
+      description: "Cómo mejoraría la experiencia, calidad o eficiencia."
+      placeholder: ""
+    validations:
+      required: true

@@ -1,0 +1,29 @@
+name: "❓ Consulta"
+description: "Plantea una duda para seguimiento."
+title: "[Question]: "
+labels: ["type: question"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: "¿Cuál es tu consulta?"
+      description: "Formula la pregunta concreta."
+      placeholder: ""
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: "Contexto"
+      description: "Qué intentabas hacer y para qué."
+      placeholder: ""
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: "¿Qué has probado?"
+      description: "Opcional: documentación, comandos o soluciones ya revisadas."
+      placeholder: ""
+    validations:
+      required: true

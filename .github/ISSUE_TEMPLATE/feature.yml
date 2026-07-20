@@ -1,0 +1,37 @@
+name: "🚀 Nueva funcionalidad"
+description: "Propón una capacidad nueva."
+title: "[Feature]: "
+labels: ["type: feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: "¿Qué necesidad resuelve?"
+      description: "Explica el problema o caso de uso."
+      placeholder: ""
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "Propuesta"
+      description: "Describe cómo debería funcionar."
+      placeholder: ""
+    validations:
+      required: true
+  - type: textarea
+    id: value
+    attributes:
+      label: "Valor esperado"
+      description: "Quién se beneficia y qué mejora aporta."
+      placeholder: ""
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternativas consideradas"
+      description: "Opcional: otras formas de resolverlo."
+      placeholder: ""
+    validations:
+      required: true
